@@ -1,8 +1,9 @@
-const CACHE_NAME = "schofoni-v1";
-const STATIC_CACHE = "schofoni-static-v1";
-const DYNAMIC_CACHE = "schofoni-dynamic-v1";
+// Service Worker for Schofoni PWA
+const CACHE_VERSION = "v1";
+const STATIC_CACHE = `schofoni-static-${CACHE_VERSION}`;
+const DYNAMIC_CACHE = `schofoni-dynamic-${CACHE_VERSION}`;
 
-// URLs to cache on install
+// Files to cache on install
 const STATIC_ASSETS = [
   "/",
   "/offline",
@@ -11,23 +12,29 @@ const STATIC_ASSETS = [
   "/icons/icon-512x512.png",
 ];
 
-// Install event - cache static assets
+// Install event - cache essential files
 self.addEventListener("install", (event) => {
-  console.log("Service Worker: Installing...");
+  console.log("[SW] Installing...");
 
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => {
-        console.log("Service Worker: Caching static assets");
+        console.log("[SW] Caching static assets");
         return cache.addAll(STATIC_ASSETS);
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        console.log("[SW] Installation complete");
+        return self.skipWaiting();
+      })
+      .catch((error) => {
+        console.error("[SW] Installation failed:", error);
+      })
   );
 });
 
 // Activate event - clean up old caches
 self.addEventListener("activate", (event) => {
-  console.log("Service Worker: Activating...");
+  console.log("[SW] Activating...");
 
   event.waitUntil(
     caches.keys()
@@ -35,149 +42,129 @@ self.addEventListener("activate", (event) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
             if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE) {
-              console.log("Service Worker: Deleting old cache:", cacheName);
+              console.log("[SW] Deleting old cache:", cacheName);
               return caches.delete(cacheName);
             }
           })
         );
       })
-      .then(() => self.clients.claim())
+      .then(() => {
+        console.log("[SW] Activation complete");
+        return self.clients.claim();
+      })
   );
 });
 
-// Fetch event - implement caching strategies
+// Fetch event - handle requests with caching strategies
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests and external requests
-  if (request.method !== "GET" || !url.origin.includes(self.location.origin)) {
+  // Only handle GET requests from our origin
+  if (request.method !== "GET" || url.origin !== self.location.origin) {
     return;
   }
 
-  // Handle different URL patterns with different strategies
+  // Route to appropriate caching strategy
   if (url.pathname.startsWith("/api/")) {
-    // API calls - Network first with fallback to cache
-    event.respondWith(networkFirstWithFallback(request));
-  } else if (/\.(png|jpg|jpeg|svg|gif|webp|ico)$/.test(url.pathname)) {
-    // Images - Cache first
-    event.respondWith(cacheFirst(request));
-  } else if (/\.(js|css|html|json)$/.test(url.pathname)) {
-    // Static files - Stale while revalidate
-    event.respondWith(staleWhileRevalidate(request));
+    event.respondWith(networkFirst(request, DYNAMIC_CACHE));
+  } else if (/\.(png|jpg|jpeg|svg|gif|webp|ico)$/i.test(url.pathname)) {
+    event.respondWith(cacheFirst(request, STATIC_CACHE));
+  } else if (/\.(js|css|html|json)$/i.test(url.pathname)) {
+    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
   } else {
-    // Pages - Network first with offline fallback
-    event.respondWith(networkFirstWithOfflineFallback(request));
+    event.respondWith(networkFirst(request, DYNAMIC_CACHE));
   }
 });
 
-// Network first with fallback strategy
-async function networkFirstWithFallback(request) {
+// Network First strategy - try network, fallback to cache
+async function networkFirst(request, cacheName) {
   try {
+    console.log("[SW] Network first for:", request.url);
+
     const networkResponse = await fetch(request);
 
-    // Cache successful responses
     if (networkResponse.ok) {
-      const cache = await caches.open(DYNAMIC_CACHE);
+      const cache = await caches.open(cacheName);
       cache.put(request, networkResponse.clone());
     }
 
     return networkResponse;
   } catch (error) {
-    console.log("Network failed, trying cache:", error);
+    console.log("[SW] Network failed, trying cache:", error);
     const cachedResponse = await caches.match(request);
-    return cachedResponse || new Response("Offline", { status: 503, statusText: "Service Unavailable" });
+    return cachedResponse || new Response("Network error", {
+      status: 508,
+      statusText: "Network Timeout"
+    });
   }
 }
 
-// Cache first strategy
-async function cacheFirst(request) {
+// Cache First strategy - try cache, fallback to network
+async function cacheFirst(request, cacheName) {
   const cachedResponse = await caches.match(request);
 
   if (cachedResponse) {
+    console.log("[SW] Cache hit for:", request.url);
     return cachedResponse;
   }
 
   try {
+    console.log("[SW] Cache miss, fetching:", request.url);
+
     const networkResponse = await fetch(request);
 
-    // Cache the response
     if (networkResponse.ok) {
-      const cache = await caches.open(STATIC_CACHE);
+      const cache = await caches.open(cacheName);
       cache.put(request, networkResponse.clone());
     }
 
     return networkResponse;
   } catch (error) {
-    console.log("Network failed for cache-first:", error);
-    return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
+    console.log("[SW] Network failed for cache-first:", error);
+    return new Response("Offline", {
+      status: 503,
+      statusText: "Service Unavailable"
+    });
   }
 }
 
-// Stale while revalidate strategy
-async function staleWhileRevalidate(request) {
+// Stale While Revalidate strategy - serve cache, update in background
+async function staleWhileRevalidate(request, cacheName) {
   const cachedResponse = await caches.match(request);
 
   const fetchPromise = fetch(request).then((networkResponse) => {
-    // Update cache in background
     if (networkResponse.ok) {
-      const cache = await caches.open(STATIC_CACHE);
+      const cache = await caches.open(cacheName);
       cache.put(request, networkResponse.clone());
     }
     return networkResponse;
+  }).catch((error) => {
+    console.log("[SW] Background fetch failed:", error);
   });
 
-  // Return cached version immediately, or wait for network
   return cachedResponse || fetchPromise;
-}
-
-// Network first with offline fallback
-async function networkFirstWithOfflineFallback(request) {
-  try {
-    const networkResponse = await fetch(request);
-
-    // Cache successful responses
-    if (networkResponse.ok) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, networkResponse.clone());
-    }
-
-    return networkResponse;
-  } catch (error) {
-    console.log("Network failed, trying cache:", error);
-    const cachedResponse = await caches.match(request);
-
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-
-    // Return offline page for navigation requests
-    if (request.mode === "navigate") {
-      return caches.match("/offline");
-    }
-
-    return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
-  }
 }
 
 // Handle messages from clients
 self.addEventListener("message", (event) => {
+  console.log("[SW] Message received:", event.data);
+
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
 });
 
-// Push notification handler (for future use)
+// Push notification handler (ready for future implementation)
 self.addEventListener("push", (event) => {
+  console.log("[SW] Push notification received:", event);
+
   const options = {
-    body: event.data.text(),
+    body: event.data ? event.data.text() : "New update available!",
     icon: "/icons/icon-192x192.png",
     badge: "/icons/icon-192x192.png",
     vibrate: [100, 50, 100],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1,
-    },
+    tag: "schofoni-update",
   };
 
   event.waitUntil(
@@ -185,16 +172,18 @@ self.addEventListener("push", (event) => {
   );
 });
 
-// Background sync for future use
+// Background sync handler
 self.addEventListener("sync", (event) => {
-  if (event.tag === "sync-data") {
-    event.waitUntil(syncData());
+  console.log("[SW] Background sync triggered:", event.tag);
+
+  if (event.tag === "background-sync") {
+    event.waitUntil(performBackgroundSync());
   }
 });
 
-// Placeholder for data synchronization
-async function syncData() {
-  // Implement background sync logic here
-  console.log("Background sync triggered");
+// Placeholder for background sync functionality
+async function performBackgroundSync() {
+  console.log("[SW] Performing background sync...");
+  // Implement your sync logic here
   return Promise.resolve();
 }

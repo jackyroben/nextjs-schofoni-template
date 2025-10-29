@@ -5,10 +5,12 @@ import { useEffect } from "react";
 export function ServiceWorkerRegistration() {
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      // Register the service worker
-      navigator.serviceWorker
-        .register("/sw.js")
-        .then((registration) => {
+      const registerServiceWorker = async () => {
+        try {
+          console.log("Registering service worker...");
+
+          const registration = await navigator.serviceWorker.register("/sw.js");
+
           console.log(
             "Service Worker registered successfully:",
             registration.scope,
@@ -34,10 +36,23 @@ export function ServiceWorkerRegistration() {
               });
             }
           });
-        })
-        .catch((error) => {
+        } catch (error) {
           console.error("Service Worker registration failed:", error);
-        });
+
+          // Fallback: try to register with different approach
+          setTimeout(() => {
+            console.log("Retrying service worker registration...");
+            registerServiceWorker();
+          }, 5000);
+        }
+      };
+
+      // Delay registration to ensure page is fully loaded
+      if (document.readyState === "complete") {
+        registerServiceWorker();
+      } else {
+        window.addEventListener("load", registerServiceWorker);
+      }
 
       // Handle service worker messages
       navigator.serviceWorker.addEventListener("message", (event) => {
@@ -59,6 +74,7 @@ export function ServiceWorkerRegistration() {
       window.addEventListener("offline", updateConnectionStatus);
 
       return () => {
+        window.removeEventListener("load", registerServiceWorker);
         window.removeEventListener("online", updateConnectionStatus);
         window.removeEventListener("offline", updateConnectionStatus);
       };
