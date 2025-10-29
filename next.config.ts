@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Add turbopack configuration to avoid webpack conflicts
+  // Turbopack configuration for SVG handling
   experimental: {
     turbo: {
       rules: {
@@ -11,16 +11,12 @@ const nextConfig: NextConfig = {
         },
       },
     },
+    // Correct property for external packages
+    serverExternalPackages: ["@supabase/supabase-js"],
   },
-  // PWA configuration will be handled via custom service worker
-  // We'll add PWA features manually without next-pwa
-  output: "standalone",
 
-  // Enable experimental features for PWA
-  experimental: {
-    runtime: "nodejs",
-    serverComponentsExternalPackages: ["@supabase/supabase-js"],
-  },
+  // PWA configuration handled via custom service worker
+  output: "standalone",
 
   // Headers for PWA assets
   headers: async () => [
