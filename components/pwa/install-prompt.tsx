@@ -17,8 +17,15 @@ export function PWAInstallPrompt() {
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
-    // Check if app is already installed
-    const checkInstalled = () => {
+    // Check if mobile device and not already installed
+    const checkMobileAndInstalled = () => {
+      // Detect mobile device
+      const isMobile =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent,
+        );
+
+      // Check if app is already installed
       const isStandalone =
         window.matchMedia("(display-mode: standalone)").matches ||
         (window.navigator as any).standalone ||
@@ -26,11 +33,17 @@ export function PWAInstallPrompt() {
 
       setIsInstalled(isStandalone);
 
-      // Show prompt after user interaction if not installed
-      if (!isStandalone && !sessionStorage.getItem("pwa-prompt-shown")) {
+      // Only show prompt on mobile devices if not installed
+      if (
+        isMobile &&
+        !isStandalone &&
+        !sessionStorage.getItem("pwa-prompt-shown")
+      ) {
         setTimeout(() => {
           setShowPrompt(true);
         }, 5000); // Show after 5 seconds
+      } else if (!isMobile) {
+        console.log("Desktop detected - skipping PWA install prompt");
       }
     };
 
@@ -42,7 +55,7 @@ export function PWAInstallPrompt() {
     };
 
     // Check installation status
-    checkInstalled();
+    checkMobileAndInstalled();
 
     // Add install prompt listener
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
