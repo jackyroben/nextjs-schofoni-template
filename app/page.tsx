@@ -17,7 +17,10 @@ import {
   Shield,
   ArrowRight,
   CheckCircle,
+  Download,
+  Smartphone,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   const { user } = useAuth();
@@ -54,6 +57,13 @@ export default function Home() {
             </Link>
           </nav>
           <div className="flex items-center space-x-4">
+            <Badge
+              variant="outline"
+              className="hidden md:flex bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
+            >
+              <Smartphone className="h-3 w-3 mr-1" />
+              PWA Ready
+            </Badge>
             {user ? (
               <Button asChild>
                 <Link href="/dashboard">
@@ -104,6 +114,49 @@ export default function Home() {
             >
               <Link href="#features">Learn More</Link>
             </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* PWA Features Section */}
+      <section className="py-20 bg-zinc-100 dark:bg-zinc-800">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-zinc-900 dark:text-zinc-50 mb-4">
+              Install as a Mobile App
+            </h2>
+            <p className="text-xl text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto">
+              Experience Schofoni like a native mobile application
+            </p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            <div className="text-center">
+              <div className="bg-blue-100 dark:bg-blue-900 rounded-full p-6 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                <Download className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Install Instantly</h3>
+              <p className="text-zinc-600 dark:text-zinc-400 text-sm">
+                Add to home screen with one tap - no app store required
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="bg-green-100 dark:bg-green-900 rounded-full p-6 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                <Wifi className="h-8 w-8 text-green-600 dark:text-green-400" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Works Offline</h3>
+              <p className="text-zinc-600 dark:text-zinc-400 text-sm">
+                Access cached content even without internet connection
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="bg-purple-100 dark:bg-purple-900 rounded-full p-6 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                <Smartphone className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Native Experience</h3>
+              <p className="text-zinc-600 dark:text-zinc-400 text-sm">
+                Fast loading, smooth animations, and full-screen mode
+              </p>
+            </div>
           </div>
         </div>
       </section>
