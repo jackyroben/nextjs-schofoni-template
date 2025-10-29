@@ -1,21 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Turbopack configuration for SVG handling
-  experimental: {
-    turbo: {
-      rules: {
-        "*.svg": {
-          loaders: ["@svgr/webpack"],
-          as: "*.js",
-        },
-      },
-    },
-    // Correct property for external packages
-    serverExternalPackages: ["@supabase/supabase-js"],
-  },
-
-  // PWA configuration handled via custom service worker
+  // Remove deprecated experimental properties
   output: "standalone",
 
   // Headers for PWA assets
