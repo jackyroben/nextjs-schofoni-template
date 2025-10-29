@@ -2,28 +2,56 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { X, Download, Smartphone } from "lucide-react";
 
 export function PWAInstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
+    // Check if app is already installed
+    const checkInstalled = () => {
+      const isStandalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (window.navigator as any).standalone ||
+        document.referrer.includes("android-app://");
+
+      setIsInstalled(isStandalone);
+
+      // Show prompt after user interaction if not installed
+      if (!isStandalone && !sessionStorage.getItem("pwa-prompt-shown")) {
+        setTimeout(() => {
+          setShowPrompt(true);
+        }, 5000); // Show after 5 seconds
+      }
+    };
+
+    // Listen for beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
       setShowPrompt(true);
     };
 
-    // Check if app is already installed
-    const isInstalled = window.matchMedia("(display-mode: standalone)").matches;
-    if (!isInstalled) {
-      window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    }
+    // Check installation status
+    checkInstalled();
+
+    // Add install prompt listener
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt,
+      );
     };
   }, []);
 
@@ -31,18 +59,19 @@ export function PWAInstallPrompt() {
     if (!deferredPrompt) return;
 
     try {
-      const result = await deferredPrompt.prompt();
-      console.log(`Install prompt was: ${result}`);
-      const { outcome } = result;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
 
       if (outcome === "accepted") {
         console.log("User accepted the install prompt");
+        setIsInstalled(true);
       } else {
         console.log("User dismissed the install prompt");
       }
 
       setDeferredPrompt(null);
       setShowPrompt(false);
+      sessionStorage.setItem("pwa-prompt-shown", "true");
     } catch (error) {
       console.error("Error during install:", error);
     }
@@ -50,13 +79,16 @@ export function PWAInstallPrompt() {
 
   const handleDismiss = () => {
     setShowPrompt(false);
-    // Don't show again for this session
-    sessionStorage.setItem("pwa-install-dismissed", "true");
+    sessionStorage.setItem("pwa-prompt-shown", "true");
   };
 
   const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-  if (!showPrompt || sessionStorage.getItem("pwa-install-dismissed")) {
+  if (
+    isInstalled ||
+    !showPrompt ||
+    sessionStorage.getItem("pwa-prompt-shown")
+  ) {
     return null;
   }
 
@@ -90,7 +122,10 @@ export function PWAInstallPrompt() {
                   To install on iOS:
                 </p>
                 <ol className="text-xs space-y-1 text-blue-800 dark:text-blue-200">
-                  <li>1. Tap the Share button <span className="inline-block">⎋</span></li>
+                  <li>
+                    1. Tap the Share button{" "}
+                    <span className="inline-block">⎋</span>
+                  </li>
                   <li>2. Scroll down and tap "Add to Home Screen"</li>
                   <li>3. Tap "Add" to confirm</li>
                 </ol>
@@ -113,11 +148,7 @@ export function PWAInstallPrompt() {
                 <Download className="h-4 w-4 mr-2" />
                 Install App
               </Button>
-              <Button
-                onClick={handleDismiss}
-                variant="outline"
-                size="sm"
-              >
+              <Button onClick={handleDismiss} variant="outline" size="sm">
                 Later
               </Button>
             </div>

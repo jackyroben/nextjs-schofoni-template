@@ -21,7 +21,6 @@ export const metadata: Metadata = {
   description:
     "Join Schofoni to accelerate your learning journey with innovative educational platform, expert instructors, and a supportive community.",
   manifest: "/manifest.json",
-  themeColor: "#0f172a",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -45,6 +44,15 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#0f172a",
+};
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -64,6 +72,19 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                  console.log('Service Worker registered with scope:', registration.scope);
+                }).catch(function(error) {
+                  console.log('Service Worker registration failed:', error);
+                });
+              }
+            `,
+          }}
+        />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

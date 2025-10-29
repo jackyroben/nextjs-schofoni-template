@@ -1,55 +1,56 @@
 import type { NextConfig } from "next";
-import withPWA from "next-pwa";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Add turbopack configuration to avoid webpack conflicts
+  experimental: {
+    turbo: {
+      rules: {
+        "*.svg": {
+          loaders: ["@svgr/webpack"],
+          as: "*.js",
+        },
+      },
+    },
+  },
+  // PWA configuration will be handled via custom service worker
+  // We'll add PWA features manually without next-pwa
+  output: "standalone",
+
+  // Enable experimental features for PWA
+  experimental: {
+    runtime: "nodejs",
+    serverComponentsExternalPackages: ["@supabase/supabase-js"],
+  },
+
+  // Headers for PWA assets
+  headers: async () => [
+    {
+      source: "/sw.js",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "public, max-age=0, must-revalidate",
+        },
+        {
+          key: "Content-Type",
+          value: "application/javascript",
+        },
+      ],
+    },
+    {
+      source: "/manifest.json",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "public, max-age=31536000, immutable",
+        },
+        {
+          key: "Content-Type",
+          value: "application/manifest+json",
+        },
+      ],
+    },
+  ],
 };
 
-export default withPWA({
-  ...nextConfig,
-  pwa: {
-    dest: "public",
-    disable: process.env.NODE_ENV === "development",
-    register: true,
-    skipWaiting: true,
-    runtimeCaching: [
-      {
-        urlPattern: /^https?.*/,
-        handler: "NetworkFirst",
-        options: {
-          cacheName: "https-calls",
-          networkTimeoutSeconds: 15,
-          expiration: {
-            maxEntries: 150,
-            maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
-          },
-          cacheableResponse: {
-            statuses: [0, 200],
-          },
-        },
-      },
-      {
-        urlPattern: /\.(?:js|css|html|json)$/,
-        handler: "StaleWhileRevalidate",
-        options: {
-          cacheName: "static-resources",
-          expiration: {
-            maxEntries: 150,
-            maxAgeSeconds: 24 * 60 * 60, // 24 hours
-          },
-        },
-      },
-      {
-        urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/,
-        handler: "CacheFirst",
-        options: {
-          cacheName: "images",
-          expiration: {
-            maxEntries: 100,
-            maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
-          },
-        },
-      },
-    ],
-  },
-});
+export default nextConfig;

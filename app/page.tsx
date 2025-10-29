@@ -19,6 +19,7 @@ import {
   CheckCircle,
   Download,
   Smartphone,
+  Wifi,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
