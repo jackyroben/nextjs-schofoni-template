@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
+("use client");
+
 import { PWAInstallPrompt } from "@/components/pwa/install-prompt";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker";
 import { PWAStatusIndicator } from "@/components/pwa/status-indicator";
@@ -71,16 +73,18 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <AuthProvider>
-          <ServiceWorkerRegistration />
-          {children}
-          <PWAInstallPrompt />
-          <PWAStatusIndicator />
-        </AuthProvider>
-      </body>
-    </html>
-  );
+      return (
+        <html>
+          <body
+            className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          >
+            <AuthProvider>
+              <ServiceWorkerRegistration />
+              <PWAInstallPrompt />
+              <PWAStatusIndicator />
+              {children}
+            </AuthProvider>
+          </body>
+        </html>
+      );
 }
