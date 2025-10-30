@@ -1,240 +1,123 @@
-// Service Worker for Schofoni PWA
-const CACHE_VERSION = "v1";
-const STATIC_CACHE = `schofoni-static-${CACHE_VERSION}`;
-const DYNAMIC_CACHE = `schofoni-dynamic-${CACHE_VERSION}`;
-
-// Essential files to cache on install
-const STATIC_ASSETS = [
+// Simplified Service Worker for Schofoni PWA
+const CACHE_NAME = "schofoni-v1";
+const urlsToCache = [
   "/",
   "/offline",
   "/manifest.json",
   "/icons/icon-192x192.png",
-  "/icons/icon-512x512.png"
+  "/icons/icon-512x512.png",
 ];
 
-// Install event - cache essential files
-self.addEventListener("install", (event) => {
-  console.log("[SW] Installing service worker...");
-
+// Install event
+self.addEventListener("install", function (event) {
+  console.log("[SW] Installing service worker");
   event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then((cache) => {
-        console.log("[SW] Caching static assets");
-        return cache.addAll(STATIC_ASSETS);
+    caches
+      .open(CACHE_NAME)
+      .then(function (cache) {
+        console.log("[SW] Caching essential files");
+        return cache.addAll(urlsToCache);
       })
-      .then(() => {
+      .then(function () {
         console.log("[SW] Installation complete");
         return self.skipWaiting();
       })
-      .catch((error) => {
+      .catch(function (error) {
         console.error("[SW] Installation failed:", error);
-      })
+      }),
   );
 });
 
-// Activate event - clean up old caches
-self.addEventListener("activate", (event) => {
-  console.log("[SW] Activating service worker...");
-
+// Activate event
+self.addEventListener("activate", function (event) {
+  console.log("[SW] Activating service worker");
   event.waitUntil(
-    caches.keys()
-      .then((cacheNames) => {
+    caches
+      .keys()
+      .then(function (cacheNames) {
         return Promise.all(
-          cacheNames.map((cacheName) => {
-            if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE) {
+          cacheNames.map(function (cacheName) {
+            if (cacheName !== CACHE_NAME) {
               console.log("[SW] Deleting old cache:", cacheName);
               return caches.delete(cacheName);
             }
-          })
+          }),
         );
       })
-      .then(() => {
+      .then(function () {
         console.log("[SW] Activation complete");
         return self.clients.claim();
-      })
+      }),
   );
 });
 
-// Fetch event - handle requests with appropriate caching strategies
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
+// Fetch event
+self.addEventListener("fetch", function (event) {
+  const request = event.request;
 
-  // Only handle GET requests from our origin
-  if (request.method !== "GET" || url.origin !== self.location.origin) {
+  // Only handle GET requests
+  if (request.method !== "GET") {
     return;
   }
 
-  // Route to appropriate caching strategy
-  if (url.pathname.startsWith("/api/")) {
-    // API calls - Network First
-    event.respondWith(networkFirst(request, DYNAMIC_CACHE));
-  } else if (/\.(png|jpg|jpeg|svg|gif|webp|ico)$/i.test(url.pathname)) {
-    // Images - Cache First
-    event.respondWith(cacheFirst(request, STATIC_CACHE));
-  } else if (/\.(js|css|html|json)$/i.test(url.pathname)) {
-    // Static files - Stale While Revalidate
-    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
-  } else {
-    // Pages - Network First with offline fallback
-    event.respondWith(networkFirstWithOfflineFallback(request, DYNAMIC_CACHE));
+  // Handle navigation requests
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request).catch(function () {
+        return caches.match("/offline");
+      }),
+    );
+    return;
   }
+
+  // Handle other requests with cache first strategy
+  event.respondWith(
+    caches
+      .match(request)
+      .then(function (response) {
+        // Return cached version if available
+        if (response) {
+          return response;
+        }
+
+        // Otherwise fetch from network
+        return fetch(request).then(function (response) {
+          // Don't cache non-successful responses
+          if (
+            !response ||
+            response.status !== 200 ||
+            response.type !== "basic"
+          ) {
+            return response;
+          }
+
+          // Clone the response since it can only be consumed once
+          var responseToCache = response.clone();
+
+          caches.open(CACHE_NAME).then(function (cache) {
+            cache.put(request, responseToCache);
+          });
+
+          return response;
+        });
+      })
+      .catch(function () {
+        // If both cache and network fail, return a basic offline response for images
+        if (request.url.match(/\.(png|jpg|jpeg|svg|gif)$/)) {
+          return new Response("Image not available offline", {
+            status: 503,
+            statusText: "Service Unavailable",
+          });
+        }
+      }),
+  );
 });
 
-// Network First strategy - try network first, fallback to cache
-async function networkFirst(request, cacheName) {
-  try {
-    console.log("[SW] Network first for:", request.url);
-
-    const networkResponse = await fetch(request);
-
-    // Cache successful responses
-    if (networkResponse && networkResponse.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
-    }
-
-    return networkResponse;
-  } catch (error) {
-    console.log("[SW] Network failed, trying cache:", error);
-
-    const cachedResponse = await caches.match(request);
-    return cachedResponse || new Response("Network error", {
-      status: 508,
-      statusText: "Network Timeout"
-    });
-  }
-}
-
-// Cache First strategy - try cache first, fallback to network
-async function cacheFirst(request, cacheName) {
-  const cachedResponse = await caches.match(request);
-
-  if (cachedResponse) {
-    console.log("[SW] Cache hit for:", request.url);
-    return cachedResponse;
-  }
-
-  try {
-    console.log("[SW] Cache miss, fetching:", request.url);
-
-    const networkResponse = await fetch(request);
-
-    // Cache successful response
-    if (networkResponse && networkResponse.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
-    }
-
-    return networkResponse;
-  } catch (error) {
-    console.log("[SW] Network failed for cache-first:", error);
-    return new Response("Offline", {
-      status: 503,
-      statusText: "Service Unavailable"
-    });
-  }
-}
-
-// Stale While Revalidate strategy - serve cache, update in background
-async function staleWhileRevalidate(request, cacheName) {
-  const cachedResponse = await caches.match(request);
-
-  // Try to update cache in background
-  const fetchPromise = fetch(request).then((networkResponse) => {
-    if (networkResponse && networkResponse.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  }).catch((error) => {
-    console.log("[SW] Background fetch failed:", error);
-  });
-
-  // Return cached version immediately if available
-  return cachedResponse || fetchPromise;
-}
-
-// Network First with offline fallback for navigation requests
-async function networkFirstWithOfflineFallback(request, cacheName) {
-  try {
-    console.log("[SW] Network first for page:", request.url);
-
-    const networkResponse = await fetch(request);
-
-    // Cache successful responses
-    if (networkResponse && networkResponse.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
-    }
-
-    return networkResponse;
-  } catch (error) {
-    console.log("[SW] Network failed, trying cache:", error);
-
-    const cachedResponse = await caches.match(request);
-
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-
-    // For navigation requests, return offline page
-    if (request.mode === "navigate") {
-      console.log("[SW] Serving offline page");
-      return caches.match("/offline");
-    }
-
-    return new Response("Offline", {
-      status: 503,
-      statusText: "Service Unavailable"
-    });
-  }
-}
-
-// Handle messages from clients
-self.addEventListener("message", (event) => {
-  console.log("[SW] Message received:", event.data);
-
+// Handle messages
+self.addEventListener("message", function (event) {
   if (event.data && event.data.type === "SKIP_WAITING") {
-    console.log("[SW] Skipping waiting");
     self.skipWaiting();
   }
 });
 
-// Push notification handler (ready for future implementation)
-self.addEventListener("push", (event) => {
-  console.log("[SW] Push notification received:", event);
-
-  const options = {
-    body: event.data ? event.data.text() : "New update available!",
-    icon: "/icons/icon-192x192.png",
-    badge: "/icons/icon-192x192.png",
-    vibrate: [100, 50, 100],
-    tag: "schofoni-update"
-  };
-
-  event.waitUntil(
-    self.registration.showNotification("Schofoni", options)
-  );
-});
-
-// Background sync handler (ready for future implementation)
-self.addEventListener("sync", (event) => {
-  console.log("[SW] Background sync triggered:", event.tag);
-
-  if (event.tag === "background-sync") {
-    event.waitUntil(performBackgroundSync());
-  }
-});
-
-// Placeholder for background sync functionality
-async function performBackgroundSync() {
-  console.log("[SW] Performing background sync...");
-  // Implement your sync logic here
-  return Promise.resolve();
-}
-```
-
-<file_path>
-myapp\schofoni\public\sw.js
-</file_path>
+console.log("[SW] Service worker script loaded");
